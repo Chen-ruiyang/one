@@ -130,20 +130,26 @@
     }
     .toast.show { display: block; }
 
-    /* 支付按钮样式 */
-    .pay-link-btn {
-      display: inline-block;
-      background: #e74c3c;
-      color: white;
-      padding: 10px 20px;
+    /* ========== 新增：收款码长按识别样式 ========== */
+    .qr-code-img {
+      width: 200px;
+      height: 200px;
+      margin: 0 auto 15px;
+      display: block;
+      border: 1px solid #e0d8cc;
       border-radius: 8px;
-      text-decoration: none;
-      font-weight: 600;
-      margin: 10px 5px;
-      cursor: pointer;
+      /* 核心属性：保证长按识别生效 */
+      image-rendering: crisp-edges; /* 二维码清晰不模糊 */
+      -webkit-touch-callout: default; /* 允许iOS长按弹出菜单 */
+      pointer-events: auto; /* 允许图片交互 */
+      user-select: none; /* 防止误选图片 */
     }
-    .pay-link-btn:hover {
-      background: #c0392b;
+    /* 手机端放大收款码，更易识别 */
+    @media (max-width: 768px) {
+      .qr-code-img {
+        width: 220px;
+        height: 220px;
+      }
     }
 
     /* ========== 手机端适配 ========== */
@@ -242,36 +248,26 @@
     </div>
   </div>
 
-  <!-- ====== 支付弹窗（支持跳转支付链接） ====== -->
+  <!-- ====== 新增：扫码支付抽屉弹窗 ====== -->
   <div class="modal" id="paymentModal" onclick="closeModalOnBg(event, 'paymentModal')">
     <div class="modal-box" style="text-align: center;">
-      <div class="modal-title">请完成支付</div>
-      <p style="margin-bottom: 10px; color: #705a45; font-size: 14px;">支付金额：</p>
+      <div class="modal-title">请先完成支付！</div>
+      <p style="margin-bottom: 10px; color: #705a45; font-size: 14px;">长按或保存下方二维码进行支付</p>
       
       <!-- 支付总金额 -->
       <h2 style="color: #e74c3c; margin-bottom: 20px; font-size: 28px;">¥ <span id="payAmountText">0.00</span></h2>
       
-      <!-- 新增：跳转支付按钮 -->
-      <div style="margin-bottom: 20px;">
-        <a id="wechatPayLink" class="pay-link-btn" href="#" target="_blank">
-          📱 微信支付
-        </a>
-        <a id="alipayLink" class="pay-link-btn" href="#" target="_blank">
-          🛡️ 支付宝支付
-        </a>
-      </div>
+      <!-- 收款码图片：⚠️请把 src 里的地址换成你自己的收款码图片链接⚠️ -->
+      <!-- 关键修改：添加自定义类名 qr-code-img 以支持长按 -->
+      <img src="付款.jpg" id="qrCodeImg" class="qr-code-img">
       
       <!-- 红色强提醒 -->
-      <div style="background-color: #fdfbf9; padding: 10px; border-radius: 8px; margin-bottom: 15px; border: 1px dashed #e74c3c;">
+      <div style="background-color: #fdfbf9; padding: 10px; border-radius: 8px; margin-bottom: 20px; border: 1px dashed #e74c3c;">
         <p style="font-size: 14px; color: #e74c3c; font-weight: bold;">
           ⚠️ 支付时请务必备注您的寝室号：<span id="payMemoDorm" style="font-size: 16px; text-decoration: underline;"></span>
         </p>
       </div>
-      
-      <!-- 备用收款码 -->
-      <p style="font-size: 12px; color: #999; margin-bottom: 10px;">若支付链接无法打开，请扫码支付</p>
-      <img src="付款.jpg" id="qrCodeImg" style="width: 150px; height: 150px; margin: 0 auto 20px; display: block; border: 1px solid #e0d8cc; border-radius: 8px;">
-      
+
       <button class="submit-btn" style="background: #d49a6a; color: white;" onclick="submitOrderAfterPayment()">我已完成支付</button>
     </div>
   </div>
@@ -282,13 +278,6 @@
     const PUBLIC_KEY="EA4dl-ivc7XImSGC8";
     (function(){emailjs.init(PUBLIC_KEY);})();
 
-    // ========== 配置支付链接 ==========
-    // 替换成你的实际支付链接（微信收款码链接/支付宝收款码链接）
-    const PAYMENT_CONFIG = {
-      wechat: "#付款:(cn183915)/测试等收款/001", // 微信支付链接
-      alipay: "https://qr.alipay.com/fkx11412db0ih2dryrdro89"      // 支付宝支付链接
-    };
-https://qr.alipay.com/fkx11412db0ih2dryrdro89
     const snacks = [
       {name:"乐事薯片", price:10}, {name:"百事可乐", price:5},
       {name:"奥利奥饼干", price:8}, {name:"德芙巧克力", price:15},
@@ -300,6 +289,7 @@ https://qr.alipay.com/fkx11412db0ih2dryrdro89
 
     let cart = JSON.parse(localStorage.getItem('campus_cart')) || [];
     let toastTimeout;
+    // 新增：存储订单信息（寝室号、电话、总金额）
     let orderInfo = { dorm: '', phone: '', total: 0 };
 
     window.onload = function() {
@@ -316,10 +306,6 @@ https://qr.alipay.com/fkx11412db0ih2dryrdro89
       });
       snackList.innerHTML = snacksHtml;
       recalculateTotal();
-
-      // 初始化支付链接
-      document.getElementById("wechatPayLink").href = PAYMENT_CONFIG.wechat;
-      document.getElementById("alipayLink").href = PAYMENT_CONFIG.alipay;
     };
 
     function saveCartData() {
@@ -367,7 +353,10 @@ https://qr.alipay.com/fkx11412db0ih2dryrdro89
       const submitSpan = document.getElementById("submitTotalText");
       if(submitSpan) submitSpan.textContent = finalTotal;
       
+      // 更新支付弹窗里的金额
       document.getElementById("payAmountText").textContent = finalTotal;
+      
+      // 保存总金额到订单信息
       orderInfo.total = finalTotal;
     }
 
@@ -437,6 +426,7 @@ https://qr.alipay.com/fkx11412db0ih2dryrdro89
       document.getElementById("checkoutModal").style.display = "flex";
     }
 
+    // 新增：准备支付（验证信息并打开支付弹窗）
     function preparePayment() {
       const dorm = document.getElementById("dorm").value.trim();
       const phone = document.getElementById("phone").value.trim();
@@ -446,13 +436,17 @@ https://qr.alipay.com/fkx11412db0ih2dryrdro89
       const phoneRegex = /^1[3-9]\d{9}$/;
       if(!phoneRegex.test(phone)) { showToast("请输入正确的11位手机号"); return; }
 
+      // 保存订单信息
       orderInfo.dorm = dorm;
       orderInfo.phone = phone;
       
+      // 关闭结算弹窗，打开支付弹窗
       document.getElementById("checkoutModal").style.display = "none";
+      
+      // 动态把寝室号填入支付提醒中
       document.getElementById("payMemoDorm").textContent = dorm;
       
-      // 零金额订单直接发送邮件
+      // 如果订单金额为 0（比如只预约了收书），直接发送邮件
       if (orderInfo.total == 0) {
           submitOrderAfterPayment(true);
           return;
@@ -462,13 +456,17 @@ https://qr.alipay.com/fkx11412db0ih2dryrdro89
       document.getElementById("paymentModal").style.display = "flex";
     }
 
+    // 新增：支付完成后发送订单邮件
     function submitOrderAfterPayment(isZeroAmount = false) {
       if (isZeroAmount) {
+        // 零金额订单直接提示
         showToast("预约成功！我们会尽快联系您。");
       } else {
+        // 关闭支付弹窗
         document.getElementById("paymentModal").style.display = "none";
       }
 
+      // 构建订单详情
       const hasSnacks = cart.some(cartItem => snacks.some(snack => snack.name === cartItem.name));
       const deliveryFee = hasSnacks ? 3 : 0;
 
@@ -485,15 +483,18 @@ https://qr.alipay.com/fkx11412db0ih2dryrdro89
 
       const message = `校园服务订单\n============\n寝室号：${orderInfo.dorm}\n电话：${orderInfo.phone}\n${orderDetail}`;
       
+      // 发送邮件
       emailjs.send(SERVICE_ID, TEMPLATE_ID, { message: message })
       .then(() => {
         if (!isZeroAmount) {
           showToast("支付凭证已记录，订单已提交！请留意来电或敲门声。");
         }
+        // 清空购物车和表单
         cart = [];
         saveCartData(); 
         document.getElementById("dorm").value = "";
         document.getElementById("phone").value = "";
+        // 重置订单信息
         orderInfo = { dorm: '', phone: '', total: 0 };
       })
       .catch(e => {
